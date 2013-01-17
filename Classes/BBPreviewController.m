@@ -29,15 +29,14 @@
 
 #pragma mark -
 
-@interface MultiContentViewController ()
-    <UIWebViewDelegate, UIScrollViewDelegate, UIDocumentInteractionControllerDelegate>
+@interface BBPreviewController () <UIWebViewDelegate, UIScrollViewDelegate, UIDocumentInteractionControllerDelegate>
 @end
 
 
 
 #pragma mark -
 
-@implementation MultiContentViewController
+@implementation BBPreviewController
 {
     BOOL _hasContent; // do we currently have content?
     BOOL _webViewIsLoading; // is webview currently loading a page request (encapsulates all sub-requests)
@@ -194,7 +193,7 @@
 
     UIImageView* imageView = [[UIImageView alloc] initWithImage:image];
     _imageSize = image.size;
-    _scrollView = [[CenteredScrollView alloc] initWithFrame:[self contentView].bounds andContentView:imageView];
+    _scrollView = [[BBCenteredScrollView alloc] initWithFrame:[self contentView].bounds andContentView:imageView];
     [[self contentView] addSubview:_scrollView];
 
     _scrollView.delegate = self;
