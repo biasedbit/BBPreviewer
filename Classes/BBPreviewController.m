@@ -327,6 +327,7 @@
         _scrollView.minimumZoomScale = adjustedRatio;
     } else {
         _scrollView.minimumZoomScale = 1;
+        [_scrollView setZoomScale:1.001 animated:animated]; // Hack to get the image smoothened
         // When the image is smaller than the viewport we never change zoom
         shouldChangeZoom = NO;
     }
