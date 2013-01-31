@@ -52,6 +52,8 @@
 
 #pragma mark Interface
 
+- (BOOL)canOtherAppOpenFileAtPath:(NSString*)pathToFile;
+- (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile animated:(BOOL)animated;
 - (BOOL)loadImage:(UIImage*)image;
 - (BOOL)loadImageAtPath:(NSString*)pathToImage;
 - (BOOL)loadMediaAtPath:(NSString*)path;

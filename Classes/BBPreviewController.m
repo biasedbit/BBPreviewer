@@ -48,6 +48,8 @@
 
     MPMoviePlayerController* _moviePlayer; // ref required to stop playing when dismissing
 
+    UIDocumentInteractionController* _openInThrowawayController;
+
     BOOL _hijackDocumentViewController; // should we hijack the view from UIViewController presenting the document?
     UIInterfaceOrientation _previousOrientation;
 }
@@ -184,8 +186,29 @@
     return self;
 }
 
+- (void)documentInteractionControllerDidDismissOpenInMenu:(UIDocumentInteractionController*)controller
+{
+    _openInThrowawayController = nil;
+}
+
 
 #pragma mark Interface
+
+- (BOOL)canOtherAppOpenFileAtPath:(NSString*)pathToFile
+{
+    NSURL* url = [NSURL fileURLWithPath:pathToFile];
+    UIDocumentInteractionController* controller = [UIDocumentInteractionController interactionControllerWithURL:url];
+    return [controller presentOpenInMenuFromRect:CGRectZero inView:nil animated:NO];
+}
+
+- (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile animated:(BOOL)animated
+{
+    NSURL* url = [NSURL fileURLWithPath:pathToFile];
+    _openInThrowawayController = [UIDocumentInteractionController interactionControllerWithURL:url];
+    _openInThrowawayController.delegate = self;
+
+    return [_openInThrowawayController presentOpenInMenuFromRect:CGRectZero inView:self.view animated:YES];
+}
 
 - (BOOL)loadImage:(UIImage*)image
 {
@@ -218,9 +241,9 @@
 {
     if (_hasContent) return NO;
 
-    dispatch_async_default_priority(^{
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         UIImage* image = [UIImage imageWithContentsOfFile:pathToImage];
-        dispatch_async_main(^{
+        dispatch_async(dispatch_get_main_queue(), ^{
             if (image == nil) {
                 NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
                                                  userInfo:@{NSLocalizedDescriptionKey: @"Could not load image"}];
@@ -263,7 +286,7 @@
     controller.delegate = self;
 
     _hijackDocumentViewController = YES;
-    dispatch_async_main(^{
+    dispatch_async(dispatch_get_main_queue(), ^{
         if (![controller presentPreviewAnimated:NO]) {
             NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
                                              userInfo:@{NSLocalizedDescriptionKey: @"Could not load document"}];
