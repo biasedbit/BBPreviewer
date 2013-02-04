@@ -313,7 +313,7 @@
 
 - (BOOL)hasContent
 {
-    return _contentType > BBPreviewContentTypeImage;
+    return _contentType > BBPreviewContentTypeNone;
 }
 
 - (UIView*)contentView
