@@ -33,4 +33,9 @@
 
 - (id)initWithFrame:(CGRect)frame andContentView:(UIView*)content;
 
+
+#pragma mark UIScrollView
+
+- (void)zoomToRect:(CGRect)rect duration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion;
+
 @end

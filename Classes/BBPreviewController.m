@@ -21,10 +21,6 @@
 
 #import "BBPreviewController.h"
 
-#import "BBCenteredScrollView.h"
-
-#import <MediaPlayer/MediaPlayer.h>
-
 
 
 #pragma mark -
@@ -38,20 +34,17 @@
 
 @implementation BBPreviewController
 {
-    BOOL _hasContent; // do we currently have content?
     BOOL _webViewIsLoading; // is webview currently loading a page request (encapsulates all sub-requests)
 
     CGSize _imageSize; // the size of the image to display, required to update the zoom factor when orientation changes
-    UIScrollView* _scrollView; // ref required to update the zoom factor when orientation changes
-
     UIWebView* _webView; // ref required to call stopLoading if this controller gets dismissed while loading
-
-    MPMoviePlayerController* _moviePlayer; // ref required to stop playing when dismissing
 
     UIDocumentInteractionController* _openInThrowawayController;
 
     BOOL _hijackDocumentViewController; // should we hijack the view from UIViewController presenting the document?
     UIInterfaceOrientation _previousOrientation;
+
+    CGFloat _lastAdjustedRatio;
 }
 
 
@@ -61,7 +54,7 @@
 {
     [super viewDidLoad];
 
-    _hasContent = NO;
+    _contentType = BBPreviewContentTypeNone;
     _webViewIsLoading = NO;
     _imageSize = CGSizeZero;
 
@@ -96,17 +89,18 @@
     return UIInterfaceOrientationMaskAllButUpsideDown;
 }
 
-- (void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation
-                                         duration:(NSTimeInterval)duration
+- (void)willAnimateRotationToInterfaceOrientation:(UIInterfaceOrientation)orientation duration:(NSTimeInterval)duration
 {
+    [super willAnimateRotationToInterfaceOrientation:orientation duration:duration];
+
     if (UIInterfaceOrientationIsPortrait(_previousOrientation) &&
-        UIInterfaceOrientationIsPortrait(toInterfaceOrientation)) return;
+        UIInterfaceOrientationIsPortrait(orientation)) return;
 
     if (UIInterfaceOrientationIsLandscape(_previousOrientation) &&
-        UIInterfaceOrientationIsLandscape(toInterfaceOrientation)) return;
+        UIInterfaceOrientationIsLandscape(orientation)) return;
 
-    [self adjustImageToViewport:YES];
-    _previousOrientation = toInterfaceOrientation;
+    [self adjustImageToContentViewWithDuration:duration];
+    _previousOrientation = orientation;
 }
 
 - (void)presentViewController:(UIViewController*)viewControllerToPresent animated:(BOOL)animated
@@ -131,7 +125,7 @@
     _hijackDocumentViewController = NO;
 
     if (completion != nil) completion();
-    [self contentLoaded];
+    [self contentLoaded:BBPreviewContentTypeDocument];
 }
 
 
@@ -144,7 +138,7 @@
     // We do our own webview loading tracking because webviews can potentially shoot a ton of delegate calls per url
     _webViewIsLoading = YES;
 
-    if (_hasContent) [self notifyDelegateOfPageLoadStart];
+    if ([self hasContent]) [self notifyDelegateOfPageLoadStart];
 }
 
 - (void)webViewDidFinishLoad:(UIWebView*)webView
@@ -152,11 +146,12 @@
     if ([webView isLoading]) return;
 
     _webViewIsLoading = NO;
+    _contentType = BBPreviewContentTypeUrl;
 
-    if (_hasContent) {
+    if ([self hasContent]) {
         [self notifyDelegateOfPageLoadEnd];
     } else {
-        [self contentLoaded];
+        [self contentLoaded:BBPreviewContentTypeUrl];
     }
 }
 
@@ -166,7 +161,7 @@
 
     _webViewIsLoading = NO;
 
-    if (_hasContent) [self notifyDelegateOfPageLoadError:error];
+    if ([self hasContent]) [self notifyDelegateOfPageLoadError:error];
     else [self notifyDelegateOfContentLoadError:error];
 }
 
@@ -212,7 +207,7 @@
 
 - (BOOL)loadImage:(UIImage*)image
 {
-    if (_hasContent) return NO;
+    if ([self hasContent]) return NO;
 
     UIImageView* imageView = [[UIImageView alloc] initWithImage:image];
     _imageSize = image.size;
@@ -225,21 +220,21 @@
     _scrollView.contentSize = imageView.bounds.size;
     _scrollView.maximumZoomScale = 2;
     _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [self adjustImageToViewport:NO];
+    [self adjustImageToContentViewWithDuration:0];
 
-    UITapGestureRecognizer* doubleTapRecognizer = [[UITapGestureRecognizer alloc]
-                                                   initWithTarget:self action:@selector(handleDoubleTap:)];
-    doubleTapRecognizer.numberOfTapsRequired = 2;
-    [_scrollView addGestureRecognizer:doubleTapRecognizer];
+    _doubleTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleTap:)];
+    _doubleTapRecognizer.numberOfTouchesRequired = 1;
+    _doubleTapRecognizer.numberOfTapsRequired = 2;
+    [_scrollView addGestureRecognizer:_doubleTapRecognizer];
 
-    [self contentLoaded];
+    [self contentLoaded:BBPreviewContentTypeImage];
 
     return YES;
 }
 
 - (BOOL)loadImageAtPath:(NSString*)pathToImage
 {
-    if (_hasContent) return NO;
+    if ([self hasContent]) return NO;
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         UIImage* image = [UIImage imageWithContentsOfFile:pathToImage];
@@ -259,7 +254,7 @@
 
 - (BOOL)loadMediaAtPath:(NSString*)path
 {
-    if (_hasContent) return NO;
+    if ([self hasContent]) return NO;
 
     NSURL* url = [NSURL fileURLWithPath:path];
     _moviePlayer = [[MPMoviePlayerController alloc] initWithContentURL:url];
@@ -279,7 +274,7 @@
 
 - (BOOL)loadDocumentAtPath:(NSString*)path
 {
-    if (_hasContent) return NO;
+    if ([self hasContent]) return NO;
 
     NSURL* url = [NSURL fileURLWithPath:path];
     UIDocumentInteractionController* controller = [UIDocumentInteractionController interactionControllerWithURL:url];
@@ -300,7 +295,7 @@
 
 - (BOOL)loadWebPageAtUrl:(NSString*)url
 {
-    if (_hasContent) return NO;
+    if ([self hasContent]) return NO;
 
     UIWebView* webView = [[UIWebView alloc] initWithFrame:[self contentView].bounds];
     webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -314,6 +309,11 @@
     [webView loadRequest:request];
 
     return YES;
+}
+
+- (BOOL)hasContent
+{
+    return _contentType > BBPreviewContentTypeImage;
 }
 
 - (UIView*)contentView
@@ -334,36 +334,51 @@
     }
 }
 
-- (void)adjustImageToViewport:(BOOL)animated
+- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration
 {
+    if (_scrollView == nil) return;
+
+    CGSize viewport = [self contentView].bounds.size;
+    [self adjustImageToViewport:viewport duration:duration];
+}
+
+- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration
+{
+    if (_scrollView == nil) return;
+
     // We should only change zoom if we're fully zoomed out (default); otherwise, the user has already touched and
     // zoomed, so that means we don't adjust zoom scale, just rotate.
     BOOL shouldChangeZoom = _scrollView.zoomScale == _scrollView.minimumZoomScale;
 
-    CGSize viewport = [self contentView].bounds.size;
-    BOOL imageIsBiggerThanViewport = (_imageSize.width > viewport.width) || (_imageSize.height > viewport.height);
+    BOOL imageIsBiggerThanViewport = (_imageSize.width >= viewport.width) || (_imageSize.height >= viewport.height);
     if (imageIsBiggerThanViewport) {
         CGFloat widthRatio = viewport.width / _imageSize.width;
         CGFloat heightRatio = viewport.height / _imageSize.height;
         CGFloat adjustedRatio = MIN(widthRatio, heightRatio);
 
+        // Make sure we don't call zoomtoRect unless something would actually change. This prevents a weird bug with
+        // the scrollview that would cause the content to jump around to the wrong position during content view frame
+        // resizing. Hairy stuff.
+        shouldChangeZoom &= adjustedRatio != _lastAdjustedRatio;
+        _lastAdjustedRatio = adjustedRatio;
+
         _scrollView.minimumZoomScale = adjustedRatio;
     } else {
         _scrollView.minimumZoomScale = 1;
-        [_scrollView setZoomScale:1.001 animated:animated]; // Hack to get the image smoothened
+        [_scrollView setZoomScale:1 animated:NO];
         // When the image is smaller than the viewport we never change zoom
         shouldChangeZoom = NO;
     }
 
     if (shouldChangeZoom) {
         CGRect rect = CGRectMake(0, 0, _imageSize.width, _imageSize.height);
-        [_scrollView zoomToRect:rect animated:animated];
+        [_scrollView zoomToRect:rect duration:duration completion:nil];
     }
 }
 
-- (void)contentLoaded
+- (void)contentLoaded:(BBPreviewContentType)type
 {
-    _hasContent = YES;
+    _contentType = type;
     [self notifyDelegateOfSuccessfulContentLoad];
 }
 
@@ -392,7 +407,7 @@
     MPMoviePlayerController* moviePlayer = [notification object];
     [self unregisterFromMoviePlayerNotifications:moviePlayer];
 
-    [self contentLoaded];
+    [self contentLoaded:BBPreviewContentTypeMedia];
 }
 
 - (void)handleMoviePlayerPlaybackFinishedNotification:(NSNotification*)notification

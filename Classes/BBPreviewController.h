@@ -19,6 +19,24 @@
 //  Copyright (c) 2013 BiasedBit. All rights reserved.
 //
 
+#import "BBCenteredScrollView.h"
+
+#import <MediaPlayer/MediaPlayer.h>
+
+
+
+#pragma mark - Enums
+
+typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
+    BBPreviewContentTypeNone = 0,
+    BBPreviewContentTypeImage,
+    BBPreviewContentTypeMedia,
+    BBPreviewContentTypeDocument,
+    BBPreviewContentTypeUrl
+};
+
+
+
 #pragma mark - Protocols
 
 @class BBPreviewController;
@@ -47,7 +65,10 @@
 
 @property(weak, nonatomic) id<BBPreviewControllerDelegate> delegate;
 
-@property(assign, nonatomic, readonly) BOOL hasContent;
+@property(assign, nonatomic, readonly) BBPreviewContentType contentType;
+@property(strong, nonatomic, readonly) BBCenteredScrollView* scrollView;
+@property(strong, nonatomic, readonly) UITapGestureRecognizer* doubleTapRecognizer;
+@property(strong, nonatomic, readonly) MPMoviePlayerController* moviePlayer;
 
 
 #pragma mark Interface
@@ -60,6 +81,10 @@
 - (BOOL)loadDocumentAtPath:(NSString*)path;
 - (BOOL)loadWebPageAtUrl:(NSString*)url;
 - (BOOL)hasContent;
+
+// These two force the adjustment of the image zoom to the a given viewport
+- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration;
+- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration;
 
 // For subclasses
 - (UIView*)contentView;
