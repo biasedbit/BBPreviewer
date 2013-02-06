@@ -83,8 +83,8 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 - (BOOL)hasContent;
 
 // These two force the adjustment of the image zoom to the a given viewport
-- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration;
-- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration;
+- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force;
+- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration force:(BOOL)force;
 
 // For subclasses
 - (UIView*)contentView;

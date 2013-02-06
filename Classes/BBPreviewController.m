@@ -23,6 +23,10 @@
 
 
 
+#define BBPreviewControllerFPEquals(a, b) fabs(a - b) <= 0.0001
+
+
+
 #pragma mark -
 
 @interface BBPreviewController () <UIWebViewDelegate, UIScrollViewDelegate, UIDocumentInteractionControllerDelegate>
@@ -44,7 +48,8 @@
     BOOL _hijackDocumentViewController; // should we hijack the view from UIViewController presenting the document?
     UIInterfaceOrientation _previousOrientation;
 
-    CGFloat _lastAdjustedRatio;
+    CGFloat _lastMinimumZoomScale;
+    CGSize _lastViewport;
 }
 
 
@@ -99,7 +104,7 @@
     if (UIInterfaceOrientationIsLandscape(_previousOrientation) &&
         UIInterfaceOrientationIsLandscape(orientation)) return;
 
-    [self adjustImageToContentViewWithDuration:duration];
+    [self adjustImageToContentViewWithDuration:duration force:NO];
     _previousOrientation = orientation;
 }
 
@@ -146,7 +151,6 @@
     if ([webView isLoading]) return;
 
     _webViewIsLoading = NO;
-    _contentType = BBPreviewContentTypeUrl;
 
     if ([self hasContent]) {
         [self notifyDelegateOfPageLoadEnd];
@@ -220,7 +224,7 @@
     _scrollView.contentSize = imageView.bounds.size;
     _scrollView.maximumZoomScale = 2;
     _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [self adjustImageToContentViewWithDuration:0];
+    [self adjustImageToContentViewWithDuration:0 force:YES];
 
     _doubleTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleTap:)];
     _doubleTapRecognizer.numberOfTouchesRequired = 1;
@@ -334,46 +338,48 @@
     }
 }
 
-- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration
+- (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force
 {
     if (_scrollView == nil) return;
 
     CGSize viewport = [self contentView].bounds.size;
-    [self adjustImageToViewport:viewport duration:duration];
+    [self adjustImageToViewport:viewport duration:duration force:force];
 }
 
-- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration
+- (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration force:(BOOL)force
 {
     if (_scrollView == nil) return;
 
-    // We should only change zoom if we're fully zoomed out (default); otherwise, the user has already touched and
-    // zoomed, so that means we don't adjust zoom scale, just rotate.
-    BOOL shouldChangeZoom = _scrollView.zoomScale == _scrollView.minimumZoomScale;
-
-    BOOL imageIsBiggerThanViewport = (_imageSize.width >= viewport.width) || (_imageSize.height >= viewport.height);
+    CGFloat nextScale;
+    BOOL imageIsBiggerThanViewport = (_imageSize.width > viewport.width) || (_imageSize.height > viewport.height);
     if (imageIsBiggerThanViewport) {
         CGFloat widthRatio = viewport.width / _imageSize.width;
         CGFloat heightRatio = viewport.height / _imageSize.height;
-        CGFloat adjustedRatio = MIN(widthRatio, heightRatio);
-
-        // Make sure we don't call zoomtoRect unless something would actually change. This prevents a weird bug with
-        // the scrollview that would cause the content to jump around to the wrong position during content view frame
-        // resizing. Hairy stuff.
-        shouldChangeZoom &= adjustedRatio != _lastAdjustedRatio;
-        _lastAdjustedRatio = adjustedRatio;
-
-        _scrollView.minimumZoomScale = adjustedRatio;
+        nextScale = MIN(widthRatio, heightRatio);
     } else {
-        _scrollView.minimumZoomScale = 1;
-        [_scrollView setZoomScale:1 animated:NO];
-        // When the image is smaller than the viewport we never change zoom
-        shouldChangeZoom = NO;
+        nextScale = 1;
     }
 
-    if (shouldChangeZoom) {
-        CGRect rect = CGRectMake(0, 0, _imageSize.width, _imageSize.height);
-        [_scrollView zoomToRect:rect duration:duration completion:nil];
+    BOOL viewportHasGrown = (_lastViewport.width < viewport.width) || (_lastViewport.height < viewport.height);
+    BOOL isAtMinimumZoomScale = BBPreviewControllerFPEquals(_scrollView.zoomScale, _scrollView.minimumZoomScale);
+    BOOL willChangeScale = !BBPreviewControllerFPEquals(nextScale, _lastMinimumZoomScale);
+
+    BOOL canChangeZoomScale;
+    if (viewportHasGrown) {
+        BOOL willBecomeUnderMinimumZoomScale = _scrollView.zoomScale < nextScale;
+        canChangeZoomScale = isAtMinimumZoomScale || willBecomeUnderMinimumZoomScale;
+    } else {
+        canChangeZoomScale = isAtMinimumZoomScale;
     }
+
+    canChangeZoomScale &= willChangeScale;
+    canChangeZoomScale |= force;
+
+    _scrollView.minimumZoomScale = nextScale;
+    _lastMinimumZoomScale = nextScale;
+    _lastViewport = viewport;
+
+    if (canChangeZoomScale) [_scrollView setZoomScale:nextScale withDuration:duration completion:nil];
 }
 
 - (void)contentLoaded:(BBPreviewContentType)type

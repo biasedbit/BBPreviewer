@@ -57,6 +57,9 @@
 
 - (void)setBounds:(CGRect)bounds
 {
+    // This magic little line fixes *A LOT* of jerkiness when resizing the frame using animations.
+    [UIView setAnimationBeginsFromCurrentState:YES];
+
     [super setBounds:bounds];
     [self centerContent];
 }
@@ -64,11 +67,19 @@
 
 #pragma mark UIScrollView
 
-- (void)zoomToRect:(CGRect)rect duration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion
+- (void)zoomToRect:(CGRect)rect withDuration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion
 {
     UIViewAnimationOptions options = UIViewAnimationOptionBeginFromCurrentState;
     [UIView animateWithDuration:duration delay:0 options:options animations:^{
         [super zoomToRect:rect animated:NO];
+    } completion:completion];
+}
+
+- (void)setZoomScale:(float)scale withDuration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion
+{
+    UIViewAnimationOptions options = UIViewAnimationOptionBeginFromCurrentState;
+    [UIView animateWithDuration:duration delay:0 options:options animations:^{
+        [super setZoomScale:scale animated:NO];
     } completion:completion];
 }
 
@@ -89,18 +100,15 @@
 
 - (void)centerContent
 {
-    // center the image as it becomes smaller than the size of the screen
-    CGSize boundsSize = self.frame.size;
+    CGSize boundsSize = self.bounds.size;
     CGRect frameToCenter = _content.frame;
 
-    // center horizontally
     if (frameToCenter.size.width < boundsSize.width) {
         frameToCenter.origin.x = (boundsSize.width - frameToCenter.size.width) / 2.0;
     } else {
         frameToCenter.origin.x = 0;
     }
 
-    // center vertically
     if (frameToCenter.size.height < boundsSize.height) {
         frameToCenter.origin.y = (boundsSize.height - frameToCenter.size.height) / 2.0;
     } else {

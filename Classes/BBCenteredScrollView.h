@@ -36,6 +36,7 @@
 
 #pragma mark UIScrollView
 
-- (void)zoomToRect:(CGRect)rect duration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion;
+- (void)zoomToRect:(CGRect)rect withDuration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion;
+- (void)setZoomScale:(float)scale withDuration:(NSTimeInterval)duration completion:(void (^)(BOOL finished))completion;
 
 @end
