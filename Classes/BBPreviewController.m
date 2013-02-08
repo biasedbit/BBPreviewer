@@ -241,7 +241,7 @@
     if ([self hasContent]) return NO;
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        UIImage* image = [UIImage imageWithContentsOfFile:pathToImage];
+        UIImage* image = [self readImageAtPath:pathToImage];
         dispatch_async(dispatch_get_main_queue(), ^{
             if (image == nil) {
                 NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
@@ -386,6 +386,38 @@
 {
     _contentType = type;
     [self notifyDelegateOfSuccessfulContentLoad];
+}
+
+- (UIImage*)readImageAtPath:(NSString*)path
+{
+#ifdef __IMAGEIO__
+    if ([[path pathExtension] isEqualToString:@"gif"]) {
+        // All credit for this goes to Rob Mayoff - https://github.com/mayoff/uiimage-from-animated-gif
+        NSData* data = [NSData dataWithContentsOfFile:path];
+        CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+        size_t count = CGImageSourceGetCount(source);
+        NSMutableArray* images = [NSMutableArray arrayWithCapacity:count];
+
+        for (size_t i = 0; i < count; ++i) {
+            CGImageRef image = CGImageSourceCreateImageAtIndex(source, i, NULL);
+            if (image == NULL) continue;
+
+            [images addObject:[UIImage imageWithCGImage:image]];
+            CGImageRelease(image);
+        }
+
+        if ([images count] == 0) return nil;
+
+        NSTimeInterval duration = _animatedGifDuration = 0 ? ([images count] * 0.05) : _animatedGifDuration;
+
+        return [UIImage animatedImageWithImages:images duration:duration];
+    }
+#else
+    #warning ImageIO not found, animated GIFs won't be supported.
+    // Be sure to "#import <ImageIO/ImageIO.h>" on your precompiled prefix header and link against ImageIO.framework.
+#endif
+    
+    return [UIImage imageWithContentsOfFile:path];
 }
 
 

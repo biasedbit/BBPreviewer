@@ -69,6 +69,7 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 @property(strong, nonatomic, readonly) BBCenteredScrollView* scrollView;
 @property(strong, nonatomic, readonly) UITapGestureRecognizer* doubleTapRecognizer;
 @property(strong, nonatomic, readonly) MPMoviePlayerController* moviePlayer;
+@property(assign, nonatomic) NSTimeInterval animatedGifDuration;
 
 
 #pragma mark Interface
