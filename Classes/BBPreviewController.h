@@ -69,6 +69,17 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 @property(strong, nonatomic, readonly) BBCenteredScrollView* scrollView;
 @property(strong, nonatomic, readonly) UITapGestureRecognizer* doubleTapRecognizer;
 @property(strong, nonatomic, readonly) MPMoviePlayerController* moviePlayer;
+/**
+ The frame duration for animated GIFs. The total duration will be the number of frames x this value.
+ 
+ Defaults to 0.06.
+ */
+@property(assign, nonatomic) NSTimeInterval animatedGifFrameDuration;
+/**
+ The total duration for the animated GIF.
+ 
+ Use this to override the default duration formula, `number_of_frames * <animatedGifFrameDuration>`.
+ */
 @property(assign, nonatomic) NSTimeInterval animatedGifDuration;
 
 

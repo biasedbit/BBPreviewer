@@ -62,6 +62,7 @@
     _contentType = BBPreviewContentTypeNone;
     _webViewIsLoading = NO;
     _imageSize = CGSizeZero;
+    _animatedGifFrameDuration = 0.06;
 
     _previousOrientation = self.interfaceOrientation;
 }
@@ -398,17 +399,24 @@
         size_t count = CGImageSourceGetCount(source);
         NSMutableArray* images = [NSMutableArray arrayWithCapacity:count];
 
-        for (size_t i = 0; i < count; ++i) {
+        for (size_t i = 0; i < count; i++) {
             CGImageRef image = CGImageSourceCreateImageAtIndex(source, i, NULL);
             if (image == NULL) continue;
 
             [images addObject:[UIImage imageWithCGImage:image]];
             CGImageRelease(image);
         }
+        CFRelease(source);
 
         if ([images count] == 0) return nil;
 
-        NSTimeInterval duration = _animatedGifDuration = 0 ? ([images count] * 0.05) : _animatedGifDuration;
+
+        NSTimeInterval duration;
+        if (_animatedGifDuration == 0) {
+            duration = [images count] * _animatedGifFrameDuration;
+        } else {
+            duration = _animatedGifDuration;
+        }
 
         return [UIImage animatedImageWithImages:images duration:duration];
     }
