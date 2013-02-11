@@ -23,6 +23,15 @@
 
 
 
+#pragma mark - Constants
+
+CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
+
+
+
+#pragma mark - Macros
+
+
 #define BBPreviewControllerFPEquals(a, b) fabs(a - b) <= 0.0001
 
 
@@ -223,14 +232,15 @@
     _scrollView.alwaysBounceHorizontal = YES;
     _scrollView.alwaysBounceVertical = YES;
     _scrollView.contentSize = imageView.bounds.size;
-    _scrollView.maximumZoomScale = 2;
+    _scrollView.maximumZoomScale = kBBPreviewControllerDefaultMaxZoomScale;
     _scrollView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self adjustImageToContentViewWithDuration:0 force:YES];
 
-    _doubleTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleDoubleTap:)];
-    _doubleTapRecognizer.numberOfTouchesRequired = 1;
-    _doubleTapRecognizer.numberOfTapsRequired = 2;
-    [_scrollView addGestureRecognizer:_doubleTapRecognizer];
+    _imageZoomDoubleTapRecognizer = [[UITapGestureRecognizer alloc]
+                                     initWithTarget:self action:@selector(handleImageZoomDoubleTap:)];
+    _imageZoomDoubleTapRecognizer.numberOfTouchesRequired = 1;
+    _imageZoomDoubleTapRecognizer.numberOfTapsRequired = 2;
+    [_scrollView addGestureRecognizer:_imageZoomDoubleTapRecognizer];
 
     [self contentLoaded:BBPreviewContentTypeImage];
 
@@ -321,24 +331,6 @@
     return _contentType > BBPreviewContentTypeNone;
 }
 
-- (UIView*)contentView
-{
-    return self.view;
-}
-
-
-#pragma mark Private helpers
-
-- (void)handleDoubleTap:(UITapGestureRecognizer*)recognizer
-{
-    UIScrollView* scrollView = (UIScrollView*)recognizer.view;
-    if (scrollView.zoomScale > scrollView.minimumZoomScale) {
-        [scrollView setZoomScale:scrollView.minimumZoomScale animated:YES];
-    } else {
-        [scrollView setZoomScale:scrollView.maximumZoomScale animated:YES];
-    }
-}
-
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force
 {
     if (_scrollView == nil) return;
@@ -381,6 +373,33 @@
     _lastViewport = viewport;
 
     if (canChangeZoomScale) [_scrollView setZoomScale:nextScale withDuration:duration completion:nil];
+}
+
+- (UIView*)contentView
+{
+    return self.view;
+}
+
+
+#pragma mark Private helpers
+
+- (BOOL)imageIsSmallerThanCurrentViewport
+{
+    return (_lastViewport.width > _imageSize.width) && (_lastViewport.height > _imageSize.height);
+}
+
+- (void)handleImageZoomDoubleTap:(UITapGestureRecognizer*)recognizer
+{
+    BBCenteredScrollView* scrollView = (BBCenteredScrollView*)recognizer.view;
+    // Already zoomed, fallback to minimum zoom scale
+    if (scrollView.zoomScale > scrollView.minimumZoomScale) {
+        [scrollView setZoomScale:scrollView.minimumZoomScale animated:YES];
+    } else if ([self imageIsSmallerThanCurrentViewport]) {
+        [scrollView setZoomScale:scrollView.maximumZoomScale animated:YES];
+    } else {
+        CGPoint location = [recognizer locationInView:scrollView.content];
+        [scrollView zoomToRect:CGRectMake(location.x, location.y, 0, 0) animated:YES];
+    }
 }
 
 - (void)contentLoaded:(BBPreviewContentType)type

@@ -66,9 +66,10 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 @property(weak, nonatomic) id<BBPreviewControllerDelegate> delegate;
 
 @property(assign, nonatomic, readonly) BBPreviewContentType contentType;
-@property(strong, nonatomic, readonly) BBCenteredScrollView* scrollView;
-@property(strong, nonatomic, readonly) UITapGestureRecognizer* doubleTapRecognizer;
 @property(strong, nonatomic, readonly) MPMoviePlayerController* moviePlayer;
+@property(strong, nonatomic, readonly) BBCenteredScrollView* scrollView;
+@property(strong, nonatomic, readonly) UITapGestureRecognizer* imageZoomDoubleTapRecognizer;
+
 /**
  The frame duration for animated GIFs. The total duration will be the number of frames x this value.
  
