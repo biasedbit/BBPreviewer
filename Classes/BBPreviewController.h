@@ -99,7 +99,9 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force;
 - (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration force:(BOOL)force;
 
-// For subclasses
+// Should be overridden by subclasses, otherwise it'll assume self.view
 - (UIView*)contentView;
+// To be used by subclasses, in case they want to override one of the load* methods.
+- (void)contentLoaded:(BBPreviewContentType)type;
 
 @end

@@ -53,8 +53,6 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     UIWebView* _webView; // ref required to call stopLoading if this controller gets dismissed while loading
 
     UIDocumentInteractionController* _openInThrowawayController;
-
-    BOOL _hijackDocumentViewController; // should we hijack the view from UIViewController presenting the document?
     UIInterfaceOrientation _previousOrientation;
 
     CGFloat _lastMinimumZoomScale;
@@ -118,31 +116,6 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     _previousOrientation = orientation;
 }
 
-- (void)presentViewController:(UIViewController*)viewControllerToPresent animated:(BOOL)animated
-                   completion:(void (^)(void))completion
-{
-    // Since we can't display documents freely on our own view controllers, we hijack the view from the view controller
-    // presentPreviewAnimated: is called on the UIDocumentInteractionController and add it as a subview of our content
-    // display view.
-
-    // Only hijack once in an attempt to maximize natural behavior on user code
-    if (!_hijackDocumentViewController) {
-        [super presentViewController:viewControllerToPresent animated:animated completion:completion];
-        return;
-    }
-
-    [self addChildViewController:viewControllerToPresent];
-    [viewControllerToPresent didMoveToParentViewController:self];
-    viewControllerToPresent.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    viewControllerToPresent.view.frame = [self contentView].frame;
-    [[self contentView] addSubview:viewControllerToPresent.view];
-
-    _hijackDocumentViewController = NO;
-
-    if (completion != nil) completion();
-    [self contentLoaded:BBPreviewContentTypeDocument];
-}
-
 
 #pragma mark UIWebViewDelegate
 
@@ -165,7 +138,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     if ([self hasContent]) {
         [self notifyDelegateOfPageLoadEnd];
     } else {
-        [self contentLoaded:BBPreviewContentTypeUrl];
+        if ([webView.request.URL isFileURL]) [self contentLoaded:BBPreviewContentTypeDocument];
+        else [self contentLoaded:BBPreviewContentTypeUrl];
     }
 }
 
@@ -278,7 +252,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     _moviePlayer.controlStyle = MPMovieControlStyleDefault;
     _moviePlayer.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 
-    [self registerForMoviePlayerNotifications:_moviePlayer];
+    [self registerMoviePlayerNotificationHandlers:_moviePlayer];
     [_moviePlayer prepareToPlay];
 
     [_moviePlayer.view setFrame:[self contentView].bounds];
@@ -291,19 +265,16 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 {
     if ([self hasContent]) return NO;
 
-    NSURL* url = [NSURL fileURLWithPath:path];
-    UIDocumentInteractionController* controller = [UIDocumentInteractionController interactionControllerWithURL:url];
-    controller.delegate = self;
+    UIWebView* webView = [[UIWebView alloc] initWithFrame:[self contentView].bounds];
+    webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    webView.backgroundColor = [UIColor clearColor];
+    webView.scalesPageToFit = YES;
+    webView.delegate = self;
+    [[self contentView] addSubview:webView];
 
-    _hijackDocumentViewController = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (![controller presentPreviewAnimated:NO]) {
-            NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
-                                             userInfo:@{NSLocalizedDescriptionKey: @"Could not load document"}];
-            [self notifyDelegateOfContentLoadError:error];
-            _hijackDocumentViewController = NO;
-        }
-    });
+    NSURL* urlForRequest = [NSURL URLWithString:path];
+    NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
+    [webView loadRequest:request];
 
     return YES;
 }
@@ -380,6 +351,12 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     return self.view;
 }
 
+- (void)contentLoaded:(BBPreviewContentType)type
+{
+    _contentType = type;
+    [self notifyDelegateOfSuccessfulContentLoad];
+}
+
 
 #pragma mark Private helpers
 
@@ -400,12 +377,6 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
         CGPoint location = [recognizer locationInView:scrollView.content];
         [scrollView zoomToRect:CGRectMake(location.x, location.y, 0, 0) animated:YES];
     }
-}
-
-- (void)contentLoaded:(BBPreviewContentType)type
-{
-    _contentType = type;
-    [self notifyDelegateOfSuccessfulContentLoad];
 }
 
 - (UIImage*)readImageAtPath:(NSString*)path
@@ -429,7 +400,6 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
         if ([images count] == 0) return nil;
 
-
         NSTimeInterval duration;
         if (_animatedGifDuration == 0) {
             duration = [images count] * _animatedGifFrameDuration;
@@ -450,7 +420,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
 #pragma mark Private helpers - notifications
 
-- (void)registerForMoviePlayerNotifications:(MPMoviePlayerController*)moviePlayer
+- (void)registerMoviePlayerNotificationHandlers:(MPMoviePlayerController*)moviePlayer
 {
     [[NSNotificationCenter defaultCenter]
      addObserver:self selector:@selector(handleMoviePlayerLoadStateChangeNotification:)
@@ -461,7 +431,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
      name:MPMoviePlayerPlaybackDidFinishNotification object:moviePlayer];
 }
 
-- (void)unregisterFromMoviePlayerNotifications:(MPMoviePlayerController*)moviePlayer
+- (void)unregisterMoviePlayerNotificationHandlers:(MPMoviePlayerController*)moviePlayer
 {
     [[NSNotificationCenter defaultCenter]
      removeObserver:self name:MPMoviePlayerLoadStateDidChangeNotification object:moviePlayer];
@@ -470,7 +440,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 - (void)handleMoviePlayerLoadStateChangeNotification:(NSNotification*)notification
 {
     MPMoviePlayerController* moviePlayer = [notification object];
-    [self unregisterFromMoviePlayerNotifications:moviePlayer];
+    [self unregisterMoviePlayerNotificationHandlers:moviePlayer];
 
     [self contentLoaded:BBPreviewContentTypeMedia];
 }
@@ -478,7 +448,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 - (void)handleMoviePlayerPlaybackFinishedNotification:(NSNotification*)notification
 {
     MPMoviePlayerController* moviePlayer = [notification object];
-    [self unregisterFromMoviePlayerNotifications:moviePlayer];
+    [self unregisterMoviePlayerNotificationHandlers:moviePlayer];
 
     NSInteger reason = [[notification userInfo] integerForKey:MPMoviePlayerPlaybackDidFinishReasonUserInfoKey];
     if (reason == MPMovieFinishReasonPlaybackError) {
