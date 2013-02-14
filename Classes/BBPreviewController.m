@@ -272,7 +272,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     webView.delegate = self;
     [[self contentView] addSubview:webView];
 
-    NSURL* urlForRequest = [NSURL URLWithString:path];
+    NSURL* urlForRequest = [NSURL fileURLWithPath:path];
     NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
     [webView loadRequest:request];
 
