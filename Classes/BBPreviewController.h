@@ -36,6 +36,13 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 };
 
 
+#pragma mark - Constants
+
+extern NSString* const kBBPreviewControllerErrorDomain;
+extern NSInteger const kBBpreviewControllerErrorCodeCannotLoadMovie;
+extern NSInteger const kBBpreviewControllerErrorCodeCannotLoadImage;
+
+
 
 #pragma mark - Protocols
 
@@ -88,12 +95,29 @@ typedef NS_ENUM(NSUInteger, BBPreviewContentType) {
 
 - (BOOL)canOtherAppOpenFileAtPath:(NSString*)pathToFile;
 - (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile animated:(BOOL)animated;
+
+- (BOOL)hasContent;
+- (BOOL)loadWebPageAtUrl:(NSString*)url;
 - (BOOL)loadImage:(UIImage*)image;
 - (BOOL)loadImageAtPath:(NSString*)pathToImage;
 - (BOOL)loadMediaAtPath:(NSString*)path;
 - (BOOL)loadDocumentAtPath:(NSString*)path;
-- (BOOL)loadWebPageAtUrl:(NSString*)url;
-- (BOOL)hasContent;
+
+/**
+ Loads a plain-text document at `path` into memory and displays it using a web view. The reason why this alternative
+ to `<loadDocumentAtPath:>` exists is because `UIWebView` doesn't properly handle plain text files with non-ASCII
+ characters.
+ 
+ @param path The path where the file resides.
+ @param trimThreshold If the plain text file is larger than X bytes, only load up to `trimThreshold` bytes and then
+ append an empty line and `trimNotice`.
+ @param truncationNotice The text to append at the end of the file if the file is too big to be loaded into memory.
+ Pass `nil` if you do not wish to include a notice.
+ 
+ @return `YES` if the file can be loaded, `NO` otherwise.
+ */
+- (BOOL)loadPlainTextDocumentAtPath:(NSString*)path truncateIfBiggerThanSize:(NSUInteger)truncationThreshold
+                   truncationNotice:(NSString*)truncationNotice;
 
 // These two force the adjustment of the image zoom to the a given viewport
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force;

@@ -25,6 +25,10 @@
 
 #pragma mark - Constants
 
+NSString* const kBBPreviewControllerErrorDomain = @"com.biasedbit.BBPreviewController";
+NSInteger const kBBpreviewControllerErrorCodeCannotLoadMovie = 1000;
+NSInteger const kBBpreviewControllerErrorCodeCannotLoadImage = 1001;
+
 CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
 
@@ -193,6 +197,29 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     return [_openInThrowawayController presentOpenInMenuFromRect:CGRectZero inView:self.view animated:YES];
 }
 
+- (BOOL)hasContent
+{
+    return _contentType > BBPreviewContentTypeNone;
+}
+
+- (BOOL)loadWebPageAtUrl:(NSString*)url
+{
+    if ([self hasContent]) return NO;
+
+    UIWebView* webView = [[UIWebView alloc] initWithFrame:[self contentView].bounds];
+    webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    webView.backgroundColor = [UIColor clearColor];
+    webView.scalesPageToFit = YES;
+    webView.delegate = self;
+    [[self contentView] addSubview:webView];
+
+    NSURL* urlForRequest = [NSURL URLWithString:url];
+    NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
+    [webView loadRequest:request];
+
+    return YES;
+}
+
 - (BOOL)loadImage:(UIImage*)image
 {
     if ([self hasContent]) return NO;
@@ -229,7 +256,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
         UIImage* image = [self readImageAtPath:pathToImage];
         dispatch_async(dispatch_get_main_queue(), ^{
             if (image == nil) {
-                NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
+                NSError* error = [NSError errorWithDomain:kBBPreviewControllerErrorDomain
+                                                     code:kBBpreviewControllerErrorCodeCannotLoadImage
                                                  userInfo:@{NSLocalizedDescriptionKey: @"Could not load image"}];
                 [self notifyDelegateOfContentLoadError:error];
             } else {
@@ -279,27 +307,34 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     return YES;
 }
 
-- (BOOL)loadWebPageAtUrl:(NSString*)url
+- (BOOL)loadPlainTextDocumentAtPath:(NSString*)path truncateIfBiggerThanSize:(NSUInteger)truncationThreshold
+                   truncationNotice:(NSString*)truncationNotice
 {
     if ([self hasContent]) return NO;
 
-    UIWebView* webView = [[UIWebView alloc] initWithFrame:[self contentView].bounds];
-    webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    webView.backgroundColor = [UIColor clearColor];
-    webView.scalesPageToFit = YES;
-    webView.delegate = self;
-    [[self contentView] addSubview:webView];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSError* error = nil;
+        NSData* data = [self readUpToBytes:truncationThreshold fromFileAtPath:path
+                              truncateWithText:truncationNotice error:&error];
 
-    NSURL* urlForRequest = [NSURL URLWithString:url];
-    NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
-    [webView loadRequest:request];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (error != nil) {
+                [self notifyDelegateOfContentLoadError:error];
+            } else {
+                UIWebView* webView = [[UIWebView alloc] initWithFrame:[self contentView].bounds];
+                webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+                webView.backgroundColor = [UIColor clearColor];
+                webView.scalesPageToFit = YES;
+                webView.delegate = self;
+                [[self contentView] addSubview:webView];
+
+                [webView loadData:data MIMEType:@"text/plain"
+                 textEncodingName:@"utf-8" baseURL:[NSURL URLWithString:@"/"]];
+            }
+        });
+    });
 
     return YES;
-}
-
-- (BOOL)hasContent
-{
-    return _contentType > BBPreviewContentTypeNone;
 }
 
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force
@@ -417,6 +452,64 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     return [UIImage imageWithContentsOfFile:path];
 }
 
+- (NSData*)readUpToBytes:(NSUInteger)length fromFileAtPath:(NSString*)path
+        truncateWithText:(NSString*)text error:(NSError**)error
+{
+    // All credit for this idea goes to Adam Wulf
+    id attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:error];
+    if (attributes == nil) return nil;
+
+    unsigned long long fileSize = [attributes fileSize];
+    if (fileSize == 0) {
+        if (error != NULL) {
+            *error = [NSError errorWithDomain:kBBPreviewControllerErrorDomain code:NSFileReadCorruptFileError
+                                     userInfo:@{NSLocalizedDescriptionKey: @"File is empty."}];
+        }
+        return nil;
+    }
+
+    // Peachy, file is under the limit; read it all and return.
+    if (fileSize <= length) return [NSData dataWithContentsOfFile:path options:0 error:error];
+
+    // File size exceeds max amount; read up to X bytes and truncate with message.
+    NSData* truncatedData = [self readBytes:length fromFileAtPath:path error:error];
+    if ((text == nil) || (truncatedData == nil)) return truncatedData;
+
+    // Successfully read `length` bytes, now append the truncation message.
+    NSMutableData* truncatedDataWithMessage = [NSMutableData dataWithData:truncatedData];
+    NSData* messageData = [[@"\n\n" stringByAppendingString:text] dataUsingEncoding:NSUTF8StringEncoding];
+    [truncatedDataWithMessage appendData:messageData];
+
+    return truncatedDataWithMessage;
+}
+
+- (NSData*)readBytes:(NSUInteger)length fromFileAtPath:(NSString*)path error:(NSError**)error
+{
+    NSFileHandle* fileHandle = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (fileHandle == nil) {
+        // Should never happen since this method is only called after the file existence and size have been assessed.
+        if (error != NULL) {
+            *error = [NSError errorWithDomain:kBBPreviewControllerErrorDomain code:NSFileNoSuchFileError
+                                     userInfo:@{NSLocalizedDescriptionKey: @"No such file."}];
+        }
+        return nil;
+    }
+
+    NSData* truncatedData = nil;
+    @try {
+        truncatedData = [fileHandle readDataOfLength:length];
+    } @catch (NSException* exception) {
+        if (error != NULL) {
+            *error = [NSError errorWithDomain:kBBPreviewControllerErrorDomain code:NSFileReadUnknownError
+                                     userInfo:[exception userInfo]];
+        }
+    } @finally {
+        [fileHandle closeFile];
+    }
+
+    return truncatedData;
+}
+
 
 #pragma mark Private helpers - notifications
 
@@ -452,7 +545,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
     NSInteger reason = [[notification userInfo] integerForKey:MPMoviePlayerPlaybackDidFinishReasonUserInfoKey];
     if (reason == MPMovieFinishReasonPlaybackError) {
-        NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:1
+        NSError* error = [NSError errorWithDomain:@"com.biasedbit" code:kBBpreviewControllerErrorCodeCannotLoadMovie
                                          userInfo:@{NSLocalizedDescriptionKey: @"Could not load movie"}];
         [self notifyDelegateOfContentLoadError:error];
     }
