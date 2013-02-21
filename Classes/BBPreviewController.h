@@ -119,6 +119,8 @@ extern NSInteger const kBBpreviewControllerErrorCodeCannotLoadImage;
 - (BOOL)loadPlainTextDocumentAtPath:(NSString*)path truncateIfBiggerThanSize:(NSUInteger)truncationThreshold
                    truncationNotice:(NSString*)truncationNotice;
 
+- (void)unloadContent;
+
 // These two force the adjustment of the image zoom to the a given viewport
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force;
 - (void)adjustImageToViewport:(CGSize)viewport duration:(NSTimeInterval)duration force:(BOOL)force;
