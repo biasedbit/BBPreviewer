@@ -421,6 +421,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
         // All credit for this goes to Rob Mayoff - https://github.com/mayoff/uiimage-from-animated-gif
         NSData* data = [NSData dataWithContentsOfFile:path];
         CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+        if (source == NULL) return nil;
+
         size_t count = CGImageSourceGetCount(source);
         NSMutableArray* images = [NSMutableArray arrayWithCapacity:count];
 
