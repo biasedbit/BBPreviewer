@@ -315,7 +315,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSError* error = nil;
         NSData* data = [self readUpToBytes:truncationThreshold fromFileAtPath:path
-                              truncateWithText:truncationNotice error:&error];
+                          truncateWithText:truncationNotice error:&error];
 
         dispatch_async(dispatch_get_main_queue(), ^{
             if (error != nil) {
@@ -335,6 +335,30 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     });
 
     return YES;
+}
+
+- (void)unloadContent
+{
+    if (![self hasContent]) return;
+
+    switch (_contentType) {
+        case BBPreviewContentTypeMedia:
+            [_moviePlayer stop];
+            [self unregisterMoviePlayerNotificationHandlers:_moviePlayer];
+            break;
+
+        case BBPreviewContentTypeImage:
+            _imageZoomDoubleTapRecognizer = nil;
+            break;
+
+        default:
+            break;
+    }
+
+    _contentType = BBPreviewContentTypeNone;
+    for (UIView* contentSubview in [self contentView].subviews) {
+        [contentSubview removeFromSuperview];
+    }
 }
 
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force
@@ -450,7 +474,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     #warning ImageIO not found, animated GIFs won't be supported.
     // Be sure to "#import <ImageIO/ImageIO.h>" on your precompiled prefix header and link against ImageIO.framework.
 #endif
-    
+
     return [UIImage imageWithContentsOfFile:path];
 }
 
