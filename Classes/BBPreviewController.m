@@ -149,6 +149,7 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
 - (void)webView:(UIWebView*)webView didFailLoadWithError:(NSError*)error
 {
+    if (error.code == kCFURLErrorCancelled) return;
     if ([webView isLoading]) return;
 
     _webViewIsLoading = NO;
@@ -185,6 +186,9 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 {
     NSURL* url = [NSURL fileURLWithPath:pathToFile];
     UIDocumentInteractionController* controller = [UIDocumentInteractionController interactionControllerWithURL:url];
+
+    // This trick only seems to work for the iPhone; on the iPad the app crashes if view is nil...
+    if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) return YES;
     return [controller presentOpenInMenuFromRect:CGRectZero inView:nil animated:NO];
 }
 
@@ -202,6 +206,16 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     return _contentType > BBPreviewContentTypeNone;
 }
 
+- (BOOL)cancelLoad
+{
+    if ((_webView != nil) && _webViewIsLoading) {
+        [_webView stopLoading];
+        return YES;
+    }
+
+    return NO;
+}
+
 - (BOOL)loadWebPageAtUrl:(NSString*)url
 {
     if ([self hasContent]) return NO;
@@ -212,6 +226,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     webView.scalesPageToFit = YES;
     webView.delegate = self;
     [[self contentView] addSubview:webView];
+
+    _webView = webView;
 
     NSURL* urlForRequest = [NSURL URLWithString:url];
     NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
@@ -300,6 +316,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     webView.delegate = self;
     [[self contentView] addSubview:webView];
 
+    _webView = webView;
+
     NSURL* urlForRequest = [NSURL fileURLWithPath:path];
     NSURLRequest* request = [NSURLRequest requestWithURL:urlForRequest];
     [webView loadRequest:request];
@@ -328,6 +346,8 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
                 webView.delegate = self;
                 [[self contentView] addSubview:webView];
 
+                _webView = webView;
+
                 [webView loadData:data MIMEType:@"text/plain"
                  textEncodingName:@"utf-8" baseURL:[NSURL URLWithString:@"/"]];
             }
@@ -339,26 +359,31 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
 - (void)unloadContent
 {
-    if (![self hasContent]) return;
+    if (![self hasContent]) {
+        [self cancelLoad];
+    } else {
+        switch (_contentType) {
+            case BBPreviewContentTypeMedia:
+                [_moviePlayer stop];
+                [self unregisterMoviePlayerNotificationHandlers:_moviePlayer];
+                break;
 
-    switch (_contentType) {
-        case BBPreviewContentTypeMedia:
-            [_moviePlayer stop];
-            [self unregisterMoviePlayerNotificationHandlers:_moviePlayer];
-            break;
-
-        case BBPreviewContentTypeImage:
-            _imageZoomDoubleTapRecognizer = nil;
-            break;
-
-        default:
-            break;
+            case BBPreviewContentTypeImage:
+                _imageZoomDoubleTapRecognizer = nil;
+                break;
+                
+            default:
+                break;
+        }
     }
 
     _contentType = BBPreviewContentTypeNone;
     for (UIView* contentSubview in [self contentView].subviews) {
         [contentSubview removeFromSuperview];
     }
+
+    _moviePlayer = nil;
+    _webView = nil;
 }
 
 - (void)adjustImageToContentViewWithDuration:(NSTimeInterval)duration force:(BOOL)force
