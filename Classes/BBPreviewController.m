@@ -194,11 +194,16 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
 
 - (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile animated:(BOOL)animated
 {
+    return [self presentOpenInMenuForFileAtPath:pathToFile fromRect:CGRectZero animated:animated];
+}
+
+- (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile fromRect:(CGRect)rect animated:(BOOL)animated
+{
     NSURL* url = [NSURL fileURLWithPath:pathToFile];
     _openInThrowawayController = [UIDocumentInteractionController interactionControllerWithURL:url];
     _openInThrowawayController.delegate = self;
 
-    return [_openInThrowawayController presentOpenInMenuFromRect:CGRectZero inView:self.view animated:YES];
+    return [_openInThrowawayController presentOpenInMenuFromRect:rect inView:self.view animated:YES];
 }
 
 - (BOOL)hasContent

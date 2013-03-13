@@ -95,6 +95,7 @@ extern NSInteger const kBBpreviewControllerErrorCodeCannotLoadImage;
 
 - (BOOL)canOtherAppOpenFileAtPath:(NSString*)pathToFile;
 - (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile animated:(BOOL)animated;
+- (BOOL)presentOpenInMenuForFileAtPath:(NSString*)pathToFile fromRect:(CGRect)rect animated:(BOOL)animated;
 
 - (BOOL)hasContent;
 - (BOOL)cancelLoad;
