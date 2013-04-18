@@ -31,7 +31,7 @@
 
 #pragma mark Creation
 
-- (id)initWithFrame:(CGRect)frame andContentView:(UIView*)content;
+- (instancetype)initWithFrame:(CGRect)frame andContentView:(UIView*)content;
 
 
 #pragma mark UIScrollView

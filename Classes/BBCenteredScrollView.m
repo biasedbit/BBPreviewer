@@ -30,7 +30,7 @@
 
 #pragma mark Creation
 
-- (id)initWithFrame:(CGRect)frame andContentView:(UIView*)content
+- (instancetype)initWithFrame:(CGRect)frame andContentView:(UIView*)content
 {
     self = [super initWithFrame:frame];
     if (self != nil) [self setContent:content];
@@ -38,7 +38,7 @@
     return self;
 }
 
-- (id)initWithFrame:(CGRect)frame
+- (instancetype)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
     if (self != nil) [self setContent:[[UIView alloc] initWithFrame:frame]];
