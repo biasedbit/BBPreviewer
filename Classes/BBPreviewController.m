@@ -91,11 +91,6 @@ CGFloat const kBBPreviewControllerDefaultMaxZoomScale = 1.5;
     [super viewDidDisappear:animated];
 }
 
-- (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
-{
-    return interfaceOrientation != UIInterfaceOrientationMaskPortraitUpsideDown;
-}
-
 - (BOOL)shouldAutorotate
 {
     return YES;
